@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { crc32, crc32Hex } from "../src/index.js";
+import { crc32, crc32Hex } from "./index.js";
 
 describe("crc32", () => {
   it("returns 0 for empty string and empty Uint8Array", () => {
@@ -17,14 +17,12 @@ describe("crc32", () => {
 
   it("returns an unsigned 32-bit integer when the most significant bit is 1", () => {
     const fourMaxBytes = new Uint8Array([0xff, 0xff, 0xff, 0xff]);
-
     expect(crc32(fourMaxBytes)).toBe(0xffffffff);
     expect(crc32(fourMaxBytes)).toBe(4294967295);
   });
 
   it("handles zero-filled byte arrays", () => {
     const fourZeroBytes = new Uint8Array([0x00, 0x00, 0x00, 0x00]);
-
     expect(crc32(fourZeroBytes)).toBe(0x2144df1c);
   });
 
@@ -32,7 +30,6 @@ describe("crc32", () => {
     const asciiBytes = new Uint8Array([0x68, 0x65, 0x6c, 0x6c, 0x6f]);
     const rocketEmojiBytes = new Uint8Array([0xf0, 0x9f, 0x9a, 0x80]);
     const cyrillicBytes = new TextEncoder().encode("Привет");
-
     expect(crc32("hello")).toBe(crc32(asciiBytes));
     expect(crc32("🚀")).toBe(crc32(rocketEmojiBytes));
     expect(crc32("Привет")).toBe(crc32(cyrillicBytes));
@@ -42,24 +39,29 @@ describe("crc32", () => {
     const firstCall = crc32("first-input");
     const secondCall = crc32("second-input");
     const repeatedFirstCall = crc32("first-input");
-
     expect(firstCall).not.toBe(secondCall);
     expect(firstCall).toBe(repeatedFirstCall);
   });
 
-  it("reads only the view range when given a Uint8Array subarray", () => {
+  it("reads only the view range when given a Uint8Array subarray, ArrayBuffer, or DataView", () => {
     const paddedBuffer = new TextEncoder().encode("__123456789__");
     const slice = paddedBuffer.subarray(2, 11);
-
+    const view = new DataView(paddedBuffer.buffer, 2, 9);
+    const rawBuffer = slice.slice().buffer;
     expect(crc32(slice)).toBe(0xcbf43926);
+    expect(crc32(view)).toBe(0xcbf43926);
+    expect(crc32(rawBuffer)).toBe(0xcbf43926);
+  });
+
+  it("supports incremental hashing via the initial parameter", () => {
+    const first = crc32("12345");
+    expect(crc32("6789", first)).toBe(0xcbf43926);
   });
 
   it("does not mutate the input Uint8Array", () => {
     const input = new Uint8Array([1, 2, 3, 4]);
     const snapshot = new Uint8Array(input);
-
     crc32(input);
-
     expect(input).toEqual(snapshot);
   });
 });
@@ -71,8 +73,9 @@ describe("crc32Hex", () => {
     expect(crc32Hex("o")).toBe("0f0f9344");
   });
 
-  it("formats standard test vectors as 8-character lowercase hex strings", () => {
+  it("formats standard test vectors and incremental hashes as 8-character lowercase hex strings", () => {
     expect(crc32Hex("123456789")).toBe("cbf43926");
+    expect(crc32Hex("6789", crc32("12345"))).toBe("cbf43926");
     expect(crc32Hex("The quick brown fox jumps over the lazy dog")).toBe("414fa339");
     expect(crc32Hex(new Uint8Array([0xff, 0xff, 0xff, 0xff]))).toBe("ffffffff");
   });
